@@ -74,7 +74,7 @@ if (-not $cert) {
         -CertStoreLocation "Cert:\LocalMachine\My" -Subject "CN=localhost-helloworld"
 }
 
-New-Website -Name $SiteName -PhysicalPath $SitePath -Port $HttpPort -IPAddress "localhost" -ApplicationPool $AppPoolName | Out-Null
+New-Website -Name $SiteName -PhysicalPath $SitePath -Port $HttpPort -HostHeader "localhost" -ApplicationPool $AppPoolName | Out-Null
 New-WebBinding -Name $SiteName -Protocol https -Port $HttpsPort -IPAddress "*"
 $binding = Get-WebBinding -Name $SiteName -Protocol https
 $binding.AddSslCertificate($cert.Thumbprint, "My")
