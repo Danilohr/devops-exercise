@@ -2,7 +2,7 @@ using System.Net;
 
 namespace StatusService;
 
-public class Worker(ILogger<Worker> logger) : BackgroundService
+public class Worker(ILogger<Worker> logger, IHostApplicationLifetime hostLifetime) : BackgroundService
 {
     private const int DelayInSeconds = 60;
     private const string HealthCheckUrl = "http://localhost:8080/HelloWorld/health";
@@ -17,18 +17,20 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
                 try
                 {
                     var response = await new HttpClient().GetAsync(HealthCheckUrl, stoppingToken);
+                    logger.LogInformation("HTTP {Code} {Reason}", (int)response.StatusCode, response.ReasonPhrase);
 
                     if (response.StatusCode != HttpStatusCode.OK)
                     {
                         logger.LogError("Health check failed with status code: {statusCode}", response.StatusCode);
-
-                        await StopAsync(stoppingToken);
+                        hostLifetime.StopApplication();
+                        return;
                     }
                 }
-                catch(HttpRequestException ex)
+                catch (HttpRequestException ex)
                 {
                     logger.LogError(ex, "Health check failed with exception: {message}", ex.Message);
-                    await StopAsync(stoppingToken);
+                    hostLifetime.StopApplication();
+                    return;
                 }
 
             }
