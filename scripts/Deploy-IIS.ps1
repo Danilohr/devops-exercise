@@ -45,6 +45,9 @@ foreach ($p in @($SitePath, $AppPath, $LogPath)) {
 if (-not (Test-Path $SourcePath)) {
     throw "SourcePath not found: $SourcePath. Publish the app first."
 }
+
+# Adds a safety backup of latest published app into the application folder
+Copy-Item -Path (Join-Path $AppPath "*") -Destination $AppPath.old -Recurse -Force
 Copy-Item -Path (Join-Path $SourcePath "*") -Destination $AppPath -Recurse -Force
 
 # Give the app-pool user read/execute on the app folder
