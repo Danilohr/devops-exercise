@@ -1,8 +1,10 @@
 #Requires -RunAsAdministrator
 # Install HelloWorld status Windows Service (Step 4)
 # Example:
-#   .\Deploy-WindowsService.ps1 -ExePath "C:\Services\HelloWorld.StatusService\HelloWorld.StatusService.exe" `
+#   .\Deploy-WindowsService.ps1 -ExePath "C:\Services\StatusService\StatusService.exe" `
 #       -UserName ".\SvcUser" -Password "P@ssw0rd!"
+#
+# Requires: Carbon.Security (grants "Log on as a service" to the service account)
 
 param(
     [string]$ServiceName = "HelloWorldStatusService",
@@ -19,6 +21,25 @@ if (-not (Test-Path $ExePath)) {
     throw "Exe not found: $ExePath. Publish the status service first."
 }
 
+# Carbon.Security - used for Grant-CPrivilege (SeServiceLogonRight)
+if (-not (Get-Module -ListAvailable -Name Carbon.Security)) {
+    Install-Module Carbon.Security -Scope CurrentUser -Force
+}
+Import-Module Carbon.Security
+
+$localUser = $UserName.TrimStart('.\')
+$svcUser   = ".\$localUser"
+$secure    = ConvertTo-SecureString $Password -AsPlainText -Force
+
+# Create local user if missing
+if (-not (Get-LocalUser -Name $localUser -ErrorAction SilentlyContinue)) {
+    New-LocalUser -Name $localUser -Password $secure -PasswordNeverExpires -UserMayNotChangePassword | Out-Null
+}
+
+# Allow the service account to read/run the app and write logs
+$exeDir = Split-Path $ExePath -Parent
+icacls $exeDir /grant "${localUser}:(OI)(CI)M" /T | Out-Null
+
 # Stop / remove existing service
 $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existing) {
@@ -29,27 +50,22 @@ if ($existing) {
     Start-Sleep -Seconds 2
 }
 
-# Create service (points to .exe, runs as specific user, auto-start)
-# Note: password must be plain for sc.exe; keep it out of git (pass as param / secret)
+# Create service: specific user, auto-start
 $binPath = "`"$ExePath`""
-sc.exe create $ServiceName binPath= $binPath DisplayName= $DisplayName start= auto obj= $UserName password= $Password
-if ($LASTEXITCODE -ne 0) {
-    throw "sc.exe create failed with exit code $LASTEXITCODE"
-}
+sc.exe create $ServiceName binPath= $binPath DisplayName= "$DisplayName" start= auto obj= $svcUser password= $Password
+if ($LASTEXITCODE -ne 0) { throw "sc.exe create failed: $LASTEXITCODE" }
 
-# Failure recovery: restart after 300 seconds
-# reset= 86400  -> reset fail count after 1 day
-# actions= restart/300000 -> restart after 300000 ms (300 seconds)
-sc.exe failure $ServiceName reset= 86400 actions= restart/300000
-if ($LASTEXITCODE -ne 0) {
-    throw "sc.exe failure failed with exit code $LASTEXITCODE"
-}
+# Grant "Log on as a service"
+Grant-CPrivilege -Identity $svcUser -Privilege 'SeServiceLogonRight'
 
+# Failure recovery: restart up to 3 times, 300 seconds between each
+# reset= 86400 - fail count resets after 1 day
+sc.exe failure $ServiceName reset= 86400 actions= restart/300000/restart/300000/restart/300000
+if ($LASTEXITCODE -ne 0) { throw "sc.exe failure failed: $LASTEXITCODE" }
 sc.exe failureflag $ServiceName 1 | Out-Null
 
-# Start
 Start-Service -Name $ServiceName
 
-Write-Host "Done. Service '$ServiceName' installed and started."
-Write-Host "Logs should appear next to the exe: $(Split-Path $ExePath -Parent)"
+Write-Host "Done. Service '$ServiceName' running as $svcUser"
+Write-Host "Logs: $exeDir"
 Get-Service -Name $ServiceName | Format-List Name, Status, StartType
