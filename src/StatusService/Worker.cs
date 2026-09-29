@@ -2,7 +2,7 @@ using System.Net;
 
 namespace StatusService;
 
-public class Worker(ILogger<Worker> logger, IHostApplicationLifetime hostLifetime) : BackgroundService
+public class Worker(ILogger<Worker> logger) : BackgroundService
 {
     private const int DelayInSeconds = 60;
     private const string HealthCheckUrl = "http://localhost:8080/HelloWorld/health";
@@ -22,15 +22,14 @@ public class Worker(ILogger<Worker> logger, IHostApplicationLifetime hostLifetim
                     if (response.StatusCode != HttpStatusCode.OK)
                     {
                         logger.LogError("Health check failed with status code: {statusCode}", response.StatusCode);
-                        hostLifetime.StopApplication();
-                        return;
+                        // Non-zero exit so SCM failure recovery restarts after 300s
+                        Environment.Exit(1);
                     }
                 }
                 catch (HttpRequestException ex)
                 {
                     logger.LogError(ex, "Health check failed with exception: {message}", ex.Message);
-                    hostLifetime.StopApplication();
-                    return;
+                    Environment.Exit(1);
                 }
 
             }
