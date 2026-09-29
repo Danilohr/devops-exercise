@@ -50,16 +50,10 @@ jobs:
             --configuration Release \
             --output ./publish/HelloWorld
 
-      - name: Zip HelloWorld package
-        run: |
-          mkdir -p ../artifacts
-          cd publish/HelloWorld
-          zip -r ../../../artifacts/HelloWorld.zip .
-
-      - name: Upload HelloWorld.zip
+      - name: Upload HelloWorld package
         uses: actions/upload-artifact@v4
         with:
           name: HelloWorld
-          path: artifacts/HelloWorld.zip
+          path: publish/HelloWorld
           if-no-files-found: error
 
