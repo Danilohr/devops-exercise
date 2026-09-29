@@ -46,8 +46,18 @@ if (-not (Test-Path $SourcePath)) {
     throw "SourcePath not found: $SourcePath. Publish the app first."
 }
 
-# Adds a safety backup of latest published app into the application folder
-Copy-Item -Path (Join-Path $AppPath "*") -Destination $AppPath.old -Recurse -Force
+# Adds a safety backup of the current app (skip if folder empty / first deploy)
+$backupPath = "$AppPath.old"
+$existingFiles = @(Get-ChildItem -Path $AppPath -Force -ErrorAction SilentlyContinue)
+if ($existingFiles.Count -gt 0) {
+    if (Test-Path $backupPath) {
+        Remove-Item -Path $backupPath -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
+    Copy-Item -Path (Join-Path $AppPath "*") -Destination $backupPath -Recurse -Force
+    Write-Host "Backup created: $backupPath"
+}
+
 Copy-Item -Path (Join-Path $SourcePath "*") -Destination $AppPath -Recurse -Force
 
 # Give the app-pool user read/execute on the app folder
